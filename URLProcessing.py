@@ -1,5 +1,6 @@
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class URLProcessing:
@@ -79,6 +80,32 @@ class URLProcessing:
 
         return cleaned_urls
 
+    def check_html_or_pdf(self, url, header):
+        """
+        Determines the content type of a URL.
+        Args:
+            url (str): The URL to check.
+            header (dict): HTTP headers to send with the request.
+        Returns:
+        tuple: A tuple containing:
+            - url (str): The URL that was checked.
+            - return_url_type (str): The content type of the URL, which can be 'html', 'pdf', or an empty string if unknown.
+        """
+        return_url_type = ""
+        try:
+            response = requests.head(url, headers=header,timeout=5)
+            if response.status_code == 200:
+                content_type = response.headers.get("Content-Type", "")
+                if "text/html" in content_type:
+                    return_url_type = "html"
+                elif "application/pdf" in content_type:
+                    return_url_type = "pdf"
+        except Exception:
+            # Ignore URLs that cause exceptions
+            pass
+
+        return url, return_url_type
+    
     def html_or_pdf(self, urls):
         """
         Sorts URLs into HTML and PDF categories based on their Content-Type.
@@ -89,21 +116,17 @@ class URLProcessing:
                 - urls_html (list of str): URLs with 'text/html' content type.
                 - urls_pdf (list of str): URLs with 'application/pdf' content type.
         """
-        urls_html, urls_pdf = [], []
         header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
-        for url in urls:
-            try:
-                response = requests.get(url, headers=header)
-                if response.status_code == 200:
-                    content_type = response.headers.get("Content-Type", "")
-                    if "text/html" in content_type:
-                        urls_html.append(url)
-                    elif "application/pdf" in content_type:
-                        urls_pdf.append(url)
-            except Exception:
-                # Ignore URLs that cause exceptions
-                continue
+        urls_html, urls_pdf = [], []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(self.check_html_or_pdf, url, header): url for url in urls}
+            for future in as_completed(futures):
+                url, url_type = future.result()
+                if url_type == "html":
+                    urls_html.append(url)
+                elif url_type == "pdf":
+                    urls_pdf.append(url)
 
         return urls_html, urls_pdf
