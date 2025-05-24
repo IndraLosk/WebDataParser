@@ -1,6 +1,8 @@
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+from config import *
 
 
 class URLProcessing:
@@ -18,6 +20,7 @@ class URLProcessing:
         Args:
             params_to_remove (list): List of query parameters to remove from URLs.
         """
+        logging.info("URLProcessing starts work")
         if params_to_remove == None:
             self.params_to_remove = [
                 "utm_source",
@@ -52,6 +55,7 @@ class URLProcessing:
                 url_parsed.fragment,
             )
         )
+        logging.info(f"URL was reassembly, new URL: {new_url}")
         return new_url
 
     def cleaner(self, urls):
@@ -73,11 +77,15 @@ class URLProcessing:
                     query_params.pop(param, None)
 
                 if query_params_temp != query_params:
+                    logging.info(f"query_params was changed for {url}")
                     url = self.reassembly_url(url_parsed, query_params)
 
                 if url not in cleaned_urls:
                     cleaned_urls.append(url)
+            else:
+                logging.info("Line isn't URL")
 
+        logging.info("Every URL was cleaned")
         return cleaned_urls
 
     def check_html_or_pdf(self, url, header):
@@ -93,19 +101,26 @@ class URLProcessing:
         """
         return_url_type = ""
         try:
-            response = requests.head(url, headers=header,timeout=5)
+            response = requests.head(url, headers=header, timeout=15)
             if response.status_code == 200:
+                logging.info("URL was get correct")
                 content_type = response.headers.get("Content-Type", "")
                 if "text/html" in content_type:
                     return_url_type = "html"
                 elif "application/pdf" in content_type:
                     return_url_type = "pdf"
-        except Exception:
+            else:
+                logging.warning(
+                    f"Non-200 status code {response.status_code} received for URL: {url}"
+                )
+        except Exception as error:
+            logging.warning(f"Can't check html or pdf for {url}. Error: {error}")
             # Ignore URLs that cause exceptions
             pass
 
+        logging.info("URL type was been determined")
         return url, return_url_type
-    
+
     def html_or_pdf(self, urls):
         """
         Sorts URLs into HTML and PDF categories based on their Content-Type.
@@ -121,7 +136,10 @@ class URLProcessing:
         }
         urls_html, urls_pdf = [], []
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(self.check_html_or_pdf, url, header): url for url in urls}
+            futures = {
+                executor.submit(self.check_html_or_pdf, url, header): url
+                for url in urls
+            }
             for future in as_completed(futures):
                 url, url_type = future.result()
                 if url_type == "html":
@@ -129,4 +147,5 @@ class URLProcessing:
                 elif url_type == "pdf":
                     urls_pdf.append(url)
 
+        logging.info("URLs types were been determined")
         return urls_html, urls_pdf

@@ -4,6 +4,7 @@ from URLProcessing import *
 from DownloadContent import *
 from concurrent.futures import ThreadPoolExecutor
 
+
 def main():
     """
     Main function that orchestrates the workflow:
@@ -27,13 +28,15 @@ def main():
             downloadContent.download_files_request()
             downloadContent.download_files_wget()
 
+            downloadContent.download_html_request()
+            downloadContent.download_html_requestsHTMLsession()
+
         except Exception as error:
             print(f"Error: {error}")
 
     else:
         print("Error: Enter filename")
-    
-    
+
 
 if __name__ == "__main__":
     main()
