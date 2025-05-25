@@ -6,6 +6,7 @@ import subprocess
 import logging
 from config import *
 from requests_html import HTMLSession
+from urllib.robotparser import RobotFileParser
 
 
 class DownloadContent:
@@ -32,16 +33,18 @@ class DownloadContent:
         self.urls_html = urls_html
         self.urls_pdf = urls_pdf
 
-    def save_to_file(self, url, folder, index, mode):
+    def save_to_file(self, url, folder, header, index, mode):
         """
         Downloads content from a URL and saves it to a file.
         Args:
             url (str): The URL to download.
             folder (str): The folder path where to save the file.
+            header (dict): HTTP headers to send with the request.
             index (int): An index number to prefix.
             mode (str): File open mode - 'wb' for binary files (PDFs), 'w' for text files (HTML).
         """
-        response = requests.get(url, timeout=15)
+        self.check_robot_txt(url, header)
+        response = requests.get(url, headers=header, timeout=15)
         if response.status_code == 200:
             logging.info("Url was get correct")
             url_parsed = urlparse(url)
@@ -63,18 +66,19 @@ class DownloadContent:
                 f"Non-200 status code {response.status_code} received for URL: {url}"
             )
 
-    def download_one_file(self, folder, url, index):
+    def download_one_file(self, folder, header, url, index):
         """
         Downloads a single PDF file.
         Args:
             folder (str): Folder to save the file.
+            header (dict): HTTP headers to send with the request.
             url (str): URL of the PDF file.
             index (int): Index to prefix the filename.
         Raises:
             ValueError: If download fails.
         """
         try:
-            self.save_to_file(url, folder, index, "wb")
+            self.save_to_file(url, folder, header, index, "wb")
         except Exception as error:
             logging.warning(f"File wasn't saved. Error: {error}")
             raise ValueError(f"Error in downloading {url}: {error}")
@@ -85,10 +89,13 @@ class DownloadContent:
         """
         folder = "raw_downloads/documents/"
         os.makedirs(folder, exist_ok=True)
+        header = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+        }
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
-                executor.submit(self.download_one_file, folder, url, i): url
+                executor.submit(self.download_one_file, folder, header, url, i): url
                 for i, url in enumerate(self.urls_pdf)
             }
             for future in as_completed(futures):
@@ -127,12 +134,13 @@ class DownloadContent:
         finally:
             os.remove("temp.txt")
 
-    def download_one_html(self, folder, url, index):
+    def download_one_html(self, folder, header, url, index):
         """
         Downloads a single HTML page.
 
         Args:
             folder (str): Folder to save the file.
+            header (dict): HTTP headers to send with the request.
             url (str): URL of the HTML page.
             index (int): Index to prefix the filename.
 
@@ -140,7 +148,7 @@ class DownloadContent:
             ValueError: If download fails.
         """
         try:
-            self.save_to_file(url, folder, index, "w")
+            self.save_to_file(url, folder, header, index, "w")
         except Exception as error:
             logging.warning(f"File wasn't saved. Error: {error}")
             raise ValueError(f"Error in downloading {url}: {error}")
@@ -151,10 +159,13 @@ class DownloadContent:
         """
         folder = "raw_downloads/pages/"
         os.makedirs(folder, exist_ok=True)
+        header = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+        }
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
-                executor.submit(self.download_one_html, folder, url, i): url
+                executor.submit(self.download_one_html, folder, header, url, i): url
                 for i, url in enumerate(self.urls_html)
             }
             for future in as_completed(futures):
@@ -170,10 +181,14 @@ class DownloadContent:
         """
         folder = "raw_downloads/pages"
         os.makedirs(folder, exist_ok=True)
+        header = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+        }
+
         for i, url in enumerate(self.urls_html):
             session = HTMLSession()
             try:
-                response = session.get(url, timeout=15)
+                response = session.get(url, headers=header, timeout=15)
                 if response.status_code == 200:
                     response.html.render(timeout=15)
                     html_content = response.html.html
@@ -195,3 +210,25 @@ class DownloadContent:
                     )
             except Exception as error:
                 logging.warning(f"File wasn't saved. Error: {url}: {error}")
+
+    def check_robot_txt(self, url, header):
+        """
+        Checks whether the given URL is allowed to be accessed according to the site's robots.txt rules.
+        Args:
+            url (str): The URL to check robots.txt rules.
+            header (dict): HTTP headers to send with the request.
+        """
+        url_parser = urlparse(url)
+        url_robots = f"{url_parser.scheme}://{url_parser.netloc}/robots.txt"
+
+        rp = RobotFileParser()
+        rp.set_url(url_robots)
+        rp.read()
+
+        user_agent = header.get("User-Agent")
+
+        if not rp.can_fetch(user_agent, url):
+            logging.warning(f"Access to {url} is disallowed by {url_robots}")
+        else:
+            logging.info(f"Access to {url} is allowed by {url_robots}")
+        
