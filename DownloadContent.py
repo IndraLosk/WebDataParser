@@ -8,6 +8,7 @@ from config import *
 from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
 import shutil
+import time
 
 
 class DownloadContent:
@@ -71,6 +72,8 @@ class DownloadContent:
             logging.warning(
                 f"Non-200 status code {response.status_code} received for URL: {url}"
             )
+            
+        time.sleep(1.5)
 
     def download_one_file(self, folder, header, url, index):
         """
