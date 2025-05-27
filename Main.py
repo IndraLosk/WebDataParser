@@ -2,7 +2,7 @@ import sys
 from Reader import Reader
 from URLProcessing import *
 from DownloadContent import *
-from concurrent.futures import ThreadPoolExecutor
+from ProcessingDownloadContent import *
 
 
 def main():
@@ -30,6 +30,10 @@ def main():
 
             downloadContent.download_html_request()
             downloadContent.download_html_requestsHTMLsession()
+
+            processingDownloadContent = ProcessingDownloadContent()
+            processingDownloadContent.processing_pdf()
+            processingDownloadContent.processing_html()
 
         except Exception as error:
             print(f"Error: {error}")

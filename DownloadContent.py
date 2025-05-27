@@ -7,6 +7,7 @@ import logging
 from config import *
 from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
+import shutil
 
 
 class DownloadContent:
@@ -50,8 +51,13 @@ class DownloadContent:
             url_parsed = urlparse(url)
             file_name = os.path.basename(url_parsed.path)
             file_name = unquote(file_name)
-            if mode == "w" and (not file_name or "." not in file_name):
-                file_name = file_name + "index.html"
+            if mode == "w":
+                if not file_name:
+                    file_name = "index.html"
+                elif "." in file_name:
+                    file_name = file_name.split(".", 1)[0] + ".html"
+                else:
+                    file_name = file_name + ".html"
             file_path = os.path.join(folder, f"{index}_{file_name}")
 
             with open(file_path, mode) as file:
@@ -88,7 +94,10 @@ class DownloadContent:
         Downloads all PDF files in parallel using requests.
         """
         folder = "raw_downloads/documents/"
-        os.makedirs(folder, exist_ok=True)
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+
+        os.makedirs(folder)
         header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
@@ -158,7 +167,10 @@ class DownloadContent:
         Downloads all HTML pages in parallel using requests.
         """
         folder = "raw_downloads/pages/"
-        os.makedirs(folder, exist_ok=True)
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+
+        os.makedirs(folder)
         header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
@@ -231,4 +243,3 @@ class DownloadContent:
             logging.warning(f"Access to {url} is disallowed by {url_robots}")
         else:
             logging.info(f"Access to {url} is allowed by {url_robots}")
-        
