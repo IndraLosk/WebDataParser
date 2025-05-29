@@ -3,6 +3,8 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 from config import *
+from FormingResultsRegistry import *
+from datetime import datetime
 
 
 class URLProcessing:
@@ -34,6 +36,8 @@ class URLProcessing:
             ]
         else:
             self.params_to_remove = params_to_remove
+
+        self.registry = FormingResultsRegistry()
 
     def reassembly_url(self, url_parsed, query_params):
         """
@@ -68,9 +72,9 @@ class URLProcessing:
         """
 
         cleaned_urls = []
-        for url in urls:
+        for id, url in enumerate(urls, start=0):
             url_parsed = urlparse(url)
-            if url_parsed.scheme == "https":
+            if url_parsed.scheme == "https" or url_parsed.scheme == "http":
                 query_params = parse_qs(url_parsed.query)
                 query_params_temp = query_params.copy()
                 for param in self.params_to_remove:
@@ -82,13 +86,26 @@ class URLProcessing:
 
                 if url not in cleaned_urls:
                     cleaned_urls.append(url)
+                    download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.registry.add_processing_info_from_cleaner(
+                        id, url, download_timestamp, "clean_url"
+                    )
+                else:
+                    download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.registry.add_processing_info_from_cleaner(
+                        id, url, download_timestamp, "duplicate_url"
+                    )
             else:
-                logging.info("Line isn't URL")
+                download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                logging.info(f"Line {url} isn't URL")
+                self.registry.add_processing_info_from_cleaner(
+                    id, url, download_timestamp, "Not url"
+                )
 
         logging.info("Every URL was cleaned")
         return cleaned_urls
 
-    def check_html_or_pdf(self, url, header):
+    def check_html_or_pdf(self, id, url, header):
         """
         Determines the content type of a URL.
         Args:
@@ -103,18 +120,21 @@ class URLProcessing:
         try:
             response = requests.head(url, headers=header, timeout=15)
             if response.status_code == 200:
-                logging.info("URL was get correct")
                 content_type = response.headers.get("Content-Type", "")
                 if "text/html" in content_type:
                     return_url_type = "html"
+                    logging.info(f"{id} URL {url} is html")
                 elif "application/pdf" in content_type:
                     return_url_type = "pdf"
+                    logging.info(f"{id} URL {url} is PDF")
             else:
                 logging.warning(
-                    f"Non-200 status code {response.status_code} received for URL: {url}"
+                    f"{id} URL {url}.Error: Non-200 status code {response.status_code}"
                 )
         except Exception as error:
-            logging.warning(f"Can't check html or pdf for {url}. Error: {error}")
+            logging.warning(
+                f"{id} URL {url} can't be checked html or pdf. Error: {error}"
+            )
             # Ignore URLs that cause exceptions
             pass
 
@@ -135,10 +155,11 @@ class URLProcessing:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
         urls_html, urls_pdf = [], []
+        logging.info("Start checking pdf or html")
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
-                executor.submit(self.check_html_or_pdf, url, header): url
-                for url in urls
+                executor.submit(self.check_html_or_pdf, i, url, header): (i, url)
+                for i, url in enumerate(urls)
             }
             for future in as_completed(futures):
                 url, url_type = future.result()
