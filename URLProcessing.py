@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 from config import *
 from FormingResultsRegistry import *
-from datetime import datetime
 
 
 class URLProcessing:
@@ -86,26 +85,19 @@ class URLProcessing:
 
                 if url not in cleaned_urls:
                     cleaned_urls.append(url)
-                    download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    self.registry.add_processing_info_from_cleaner(
-                        id, url, download_timestamp, "clean_url"
-                    )
+                    self.registry.add_processing_info_from_cleaner(id, url, "clean_url")
                 else:
-                    download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     self.registry.add_processing_info_from_cleaner(
-                        id, url, download_timestamp, "duplicate_url"
+                        id, url, "duplicate_url"
                     )
             else:
-                download_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 logging.info(f"Line {url} isn't URL")
-                self.registry.add_processing_info_from_cleaner(
-                    id, url, download_timestamp, "Not url"
-                )
+                self.registry.add_processing_info_from_cleaner(id, url, "Not url")
 
         logging.info("Every URL was cleaned")
         return cleaned_urls
 
-    def check_html_or_pdf(self, id, url, header):
+    def check_html_or_pdf(self, url, header):
         """
         Determines the content type of a URL.
         Args:
@@ -123,18 +115,16 @@ class URLProcessing:
                 content_type = response.headers.get("Content-Type", "")
                 if "text/html" in content_type:
                     return_url_type = "html"
-                    logging.info(f"{id} URL {url} is html")
+                    logging.info(f"URL {url} is html")
                 elif "application/pdf" in content_type:
                     return_url_type = "pdf"
-                    logging.info(f"{id} URL {url} is PDF")
+                    logging.info(f"URL {url} is PDF")
             else:
                 logging.warning(
-                    f"{id} URL {url}.Error: Non-200 status code {response.status_code}"
+                    f"URL {url}.Error: Non-200 status code {response.status_code}"
                 )
         except Exception as error:
-            logging.warning(
-                f"{id} URL {url} can't be checked html or pdf. Error: {error}"
-            )
+            logging.warning(f"URL {url} can't be checked html or pdf. Error: {error}")
             # Ignore URLs that cause exceptions
             pass
 
@@ -158,8 +148,8 @@ class URLProcessing:
         logging.info("Start checking pdf or html")
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
-                executor.submit(self.check_html_or_pdf, i, url, header): (i, url)
-                for i, url in enumerate(urls)
+                executor.submit(self.check_html_or_pdf, url, header): url
+                for url in urls
             }
             for future in as_completed(futures):
                 url, url_type = future.result()

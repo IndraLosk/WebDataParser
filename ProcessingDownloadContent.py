@@ -3,6 +3,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import *
 from bs4 import BeautifulSoup
+from config import *
+from langdetect import detect
 
 
 class ProcessingDownloadContent:
@@ -24,12 +26,24 @@ class ProcessingDownloadContent:
             reader = PdfReader(file_path)
             output_path = os.path.join(folder, os.path.basename(file_path)) + ".txt"
 
-            with open(output_path, "a") as file:
+            full_text = ""
+
+            with open(output_path, "a", encoding="utf-8") as file:
+                count = 0
                 for page in reader.pages:
                     text = page.extract_text()
                     if text:
                         file.write(text)
-            logging.info(f"Successfully processed PDF")
+                        full_text += text
+                    count += 1
+
+            if full_text:
+                language = detect(full_text)
+            else:
+                language = "unknown"
+            logging.info(
+                f"From {file_path} was successfully processed PDF in {output_path} with language {language} and {count} pages."
+            )
         except Exception as error:
             logging.warning(f"Error processing {file_path}: {error}")
             raise ValueError(f"Error processing: {error}")
@@ -42,6 +56,8 @@ class ProcessingDownloadContent:
         os.makedirs(folder, exist_ok=True)
 
         files_paths = []
+
+        logging.info("Start processing PDF")
 
         for file_name in os.listdir("raw_downloads/documents/"):
             file_path = os.path.join("raw_downloads/documents/", file_name)
@@ -76,15 +92,21 @@ class ProcessingDownloadContent:
             with open(file_path, "r") as file:
                 html_content = file.read()
 
-            soup = BeautifulSoup(html_content, "html.parser")
-            for script_or_style in soup(["script", "style"]):
-                script_or_style.decompose()
-            text = soup.get_text()
-            output_path = os.path.join(folder, os.path.basename(file_path)) + ".txt"
+                soup = BeautifulSoup(html_content, "html.parser")
+                for script_or_style in soup(["script", "style"]):
+                    script_or_style.decompose()
+                text = soup.get_text()
+                output_path = os.path.join(folder, os.path.basename(file_path)) + ".txt"
 
-            with open(output_path, "a") as file:
-                file.write(text)
-            logging.info(f"Successfully processed HTML")
+                with open(output_path, "a") as file:
+                    file.write(text)
+
+                language = None
+                if soup.html:
+                    language = soup.html.get("lang", None)
+                logging.info(
+                    f"From {file_path} was successfully processed HTML in {output_path} with language {language}."
+                )
         except Exception as error:
             logging.warning(f"Error processing {file_path}: {error}")
             raise ValueError(f"Error processing: {error}")

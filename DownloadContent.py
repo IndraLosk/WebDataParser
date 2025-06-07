@@ -9,6 +9,7 @@ from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
 import shutil
 import time
+from FormingResultsRegistry import *
 
 
 class DownloadContent:
@@ -34,6 +35,8 @@ class DownloadContent:
             raise ValueError("Enter arguments for downloading")
         self.urls_html = urls_html
         self.urls_pdf = urls_pdf
+
+        self.registry = FormingResultsRegistry()
 
     def save_to_file(self, url, folder, header, index, mode):
         """
@@ -66,13 +69,14 @@ class DownloadContent:
                     file.write(response.content)
                 else:
                     file.write(response.text)
-
-            logging.info("File was saved correct")
+            logging.info(
+                f"URL {url} with size {os.path.getsize(file_path)} was saved as {file_path}. File was saved correct"
+            )
         else:
             logging.warning(
-                f"Non-200 status code {response.status_code} received for URL: {url}"
+                f"URL {url}. Error:Non-200 status code {response.status_code} received for URL: {url}"
             )
-            
+
         time.sleep(1.5)
 
     def download_one_file(self, folder, header, url, index):
@@ -89,8 +93,8 @@ class DownloadContent:
         try:
             self.save_to_file(url, folder, header, index, "wb")
         except Exception as error:
-            logging.warning(f"File wasn't saved. Error: {error}")
-            raise ValueError(f"Error in downloading {url}: {error}")
+            logging.warning(f"URL {url}. Error: File wasn't saved {error}")
+            raise ValueError(f"URL {url}. Error: in downloading {url}: {error}")
 
     def download_files_request(self):
         """
@@ -104,6 +108,8 @@ class DownloadContent:
         header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
+
+        logging.info("Start domload PDF")
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
@@ -177,6 +183,8 @@ class DownloadContent:
         header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
         }
+
+        logging.info("Start domload HTML")
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
